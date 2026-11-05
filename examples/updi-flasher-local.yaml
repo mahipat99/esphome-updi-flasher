@@ -20,15 +20,7 @@ external_components:
       path: ../components
     components: [updi_flasher]
 
-uart:
-  id: updi_uart
-  tx_pin: GPIO17
-  rx_pin: GPIO16
-  baud_rate: 115200
-  parity: EVEN
-  stop_bits: 2
-  data_bits: 8
-  rx_buffer_size: 512
-
 updi_flasher:
-  uart_id: updi_uart
+  pin: 17        # single UPDI wire (open-drain, UART tx+rx muxed)
+  uart_num: 1       # not the logger UART
+  baud_rate: 115200

@@ -15,18 +15,10 @@ external_components:
   - source: github://mahipat99/esphome-updi-flasher@main
     components: [updi_flasher]
 
-uart:
-  id: updi_uart
-  tx_pin: GPIO17
-  rx_pin: GPIO16
-  baud_rate: 115200
-  parity: EVEN
-  stop_bits: 2
-  data_bits: 8
-  rx_buffer_size: 512
-
 updi_flasher:
-  uart_id: updi_uart
+  pin: 17
+  uart_num: 1
+  baud_rate: 115200
 ```
 
 Then browse to `http://<device>/updi`, choose your `.hex` (e.g. exported from
@@ -37,14 +29,16 @@ See `examples/` for full configs.
 ## Wiring
 
 ```
-ESP32 TX ──[ 470R–1k ]──┬── ATtiny UPDI
-ESP32 RX ───────────────┘
+ESP32 GPIO17 ───────────┬── ATtiny UPDI
+                        └── 4.7k–10k pull-up to 3V3 (recommended)
 ESP32 GND ───────────────── ATtiny GND
 ESP32 3V3 ───────────────── ATtiny VCC
 ```
 
-TX and RX share the UPDI line, so every byte sent is echoed back; the component
-discards the echo. Use a UART that is not used by the ESPHome logger.
+The pin is configured open-drain and the hardware UART's TX and RX are both routed to
+it through the GPIO matrix, so no series resistor is needed. Each byte sent is echoed
+back; the component discards the echo. Use a UART that is not used by the ESPHome logger.
+**ESP-IDF framework only.**
 
 ## How it works
 
@@ -57,7 +51,7 @@ discards the echo. Use a UART that is not used by the ESPHome logger.
 ## Known caveats
 
 - Targets tinyAVR 1-series with 16 KB flash. Other sizes need `FLASH_SIZE`, `PAGE_SIZE`, `FLASH_BASE` in `updi_flasher.h`.
-- The baud change used for the break (`set_baud_rate` / `load_settings`) and the web-handler signatures vary between ESPHome versions; you may need small tweaks.
+- Web-handler signatures vary between ESPHome versions; you may need small tweaks.
 - **No authentication** on `/updi`: anyone on your network can flash the target.
 - After flashing, UPDI is disabled until power-cycle (normal avrdude behaviour). If you want to reflash without power-cycling, remove the final `CTRLB` write in `flash_()`.
 - Do not change the UPDI pin fuse to GPIO/RESET unless you have a high-voltage programmer.

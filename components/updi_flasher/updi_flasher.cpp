@@ -3,6 +3,10 @@
 #include "esphome/core/hal.h"
 #include "esphome/core/log.h"
 #include <algorithm>
+#include "driver/gpio.h"
+#include "driver/uart.h"
+#include "esp_rom_gpio.h"
+#include "soc/uart_periph.h"
 
 namespace esphome {
 namespace updi_flasher {
@@ -52,12 +56,47 @@ class UpdiWebHandler : public AsyncWebHandler {
 
 // ======================= Component =======================
 void UpdiFlasher::setup() {
-  this->baud_ = this->parent_->get_baud_rate();
+  const uart_port_t port = (uart_port_t) this->uart_num_;
+  const gpio_num_t pin = (gpio_num_t) this->pin_;
+
+  // UPDI pin: open-drain output with input enabled, internal pull-up on.
+  gpio_config_t io = {};
+  io.pin_bit_mask = 1ULL << this->pin_;
+  io.mode = GPIO_MODE_INPUT_OUTPUT_OD;
+  io.pull_up_en = GPIO_PULLUP_ENABLE;
+  io.pull_down_en = GPIO_PULLDOWN_DISABLE;
+  io.intr_type = GPIO_INTR_DISABLE;
+  if (gpio_config(&io) != ESP_OK) {
+    ESP_LOGE(TAG, "GPIO config failed");
+    this->mark_failed();
+    return;
+  }
+
+  uart_config_t cfg = {};
+  cfg.baud_rate = this->baud_;
+  cfg.data_bits = UART_DATA_8_BITS;
+  cfg.parity = UART_PARITY_EVEN;
+  cfg.stop_bits = UART_STOP_BITS_2;
+  cfg.flow_ctrl = UART_HW_FLOWCTRL_DISABLE;
+  cfg.source_clk = UART_SCLK_DEFAULT;
+  if (uart_param_config(port, &cfg) != ESP_OK ||
+      uart_driver_install(port, 512, 0, 0, nullptr, 0) != ESP_OK) {
+    ESP_LOGE(TAG, "UART %d setup failed (is it used by logger or another component?)", this->uart_num_);
+    this->mark_failed();
+    return;
+  }
+
+  // Route UART TX and RX to the same pin through the GPIO matrix.
+  esp_rom_gpio_connect_out_signal(pin, UART_PERIPH_SIGNAL(port, SOC_UART_TX_PIN_IDX), false, false);
+  esp_rom_gpio_connect_in_signal(pin, UART_PERIPH_SIGNAL(port, SOC_UART_RX_PIN_IDX), false);
+
   this->base_->add_handler(new UpdiWebHandler(this));
 }
 
 void UpdiFlasher::dump_config() {
   ESP_LOGCONFIG(TAG, "UPDI flasher: open http://<device>/updi to upload a .hex");
+  ESP_LOGCONFIG(TAG, "  Pin: GPIO%d (open-drain), UART%d, %u baud", this->pin_, this->uart_num_,
+                (unsigned) this->baud_);
   ESP_LOGCONFIG(TAG, "  Target: tinyAVR 1-series, %u B flash, %u B pages", (unsigned) FLASH_SIZE,
                 (unsigned) PAGE_SIZE);
 }
@@ -181,29 +220,18 @@ bool UpdiFlasher::parse_line_() {
 }
 
 // ======================= UPDI link layer =======================
-void UpdiFlasher::flush_rx_() {
-  uint8_t b;
-  while (this->available()) this->read_byte(&b);
-}
+void UpdiFlasher::flush_rx_() { uart_flush_input((uart_port_t) this->uart_num_); }
 
 bool UpdiFlasher::rx_(uint8_t *buf, size_t n, uint32_t timeout_ms) {
-  uint32_t start = millis();
-  size_t got = 0;
-  while (got < n) {
-    if (this->available()) {
-      this->read_byte(&buf[got++]);
-      continue;
-    }
-    if (millis() - start > timeout_ms) return false;
-    delayMicroseconds(20);
-  }
-  return true;
+  int got = uart_read_bytes((uart_port_t) this->uart_num_, buf, n, pdMS_TO_TICKS(timeout_ms));
+  return got == (int) n;
 }
 
-// Send bytes, then swallow the echo (RX is wired to the same line as TX).
+// Send bytes, wait until shifted out, then swallow the echo (RX sees our own TX).
 bool UpdiFlasher::tx_(const uint8_t *d, size_t n) {
-  this->write_array(d, n);
-  this->flush();
+  const uart_port_t port = (uart_port_t) this->uart_num_;
+  if (uart_write_bytes(port, d, n) < 0) return false;
+  uart_wait_tx_done(port, pdMS_TO_TICKS(100));
   uint8_t e;
   for (size_t i = 0; i < n; i++)
     if (!this->rx_(&e, 1, 50)) return false;
@@ -211,19 +239,16 @@ bool UpdiFlasher::tx_(const uint8_t *d, size_t n) {
 }
 
 // Break = 0x00 at 300 baud (8E2) -> ~33 ms of low.
-// NOTE: set_baud_rate()/load_settings() are the ESPHome-version-sensitive calls.
 void UpdiFlasher::send_break_() {
-  this->parent_->set_baud_rate(300);
-  this->parent_->load_settings(false);
-  this->flush_rx_();
+  const uart_port_t port = (uart_port_t) this->uart_num_;
+  uart_set_baudrate(port, 300);
+  uart_flush_input(port);
   uint8_t z = 0;
-  this->write_array(&z, 1);
-  this->flush();
-  delay(15);
-  this->parent_->set_baud_rate(this->baud_);
-  this->parent_->load_settings(false);
+  uart_write_bytes(port, &z, 1);
+  uart_wait_tx_done(port, pdMS_TO_TICKS(300));
+  uart_set_baudrate(port, this->baud_);
   delay(2);
-  this->flush_rx_();
+  uart_flush_input(port);
 }
 
 bool UpdiFlasher::stcs_(uint8_t reg, uint8_t val) {
