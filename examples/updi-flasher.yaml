@@ -1,0 +1,36 @@
+# Example using the component straight from GitHub.
+# Replace YOUR_USERNAME with your GitHub username.
+esphome:
+  name: updi-flasher
+
+esp32:
+  board: esp32-s3-devkitc-1
+  framework:
+    type: esp-idf
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+logger:
+  hardware_uart: UART0   # keep UART1/UART2 free for UPDI
+
+external_components:
+  - source: github://mahipat99/esphome-updi-flasher@main
+    components: [updi_flasher]
+    refresh: 1min
+
+uart:
+  id: updi_uart
+  tx_pin: GPIO17         # -> 470R..1k -> ATtiny UPDI
+  rx_pin: GPIO16         # -> directly to ATtiny UPDI (same node)
+  baud_rate: 115200
+  parity: EVEN
+  stop_bits: 2
+  data_bits: 8
+  rx_buffer_size: 512
+
+updi_flasher:
+  uart_id: updi_uart
+
+# Open http://updi-flasher.local/updi and upload your .hex
