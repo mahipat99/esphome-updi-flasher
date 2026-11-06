@@ -31,8 +31,10 @@ See `examples/` for full configs.
 | Option | Default | Meaning |
 |---|---|---|
 | `pin` | required | GPIO used as the single UPDI wire (`GPIO21`, `TX`, ... all accepted). |
-| `uart_num` | `1` | Which of the chip's internal UART peripherals generates the UPDI signal. Independent of the pin (the GPIO matrix maps any pin to any UART). Don't pick the one the ESPHome logger uses (UART0 by default). |
+| `uart_num` | `1` | Which of the chip's internal UART peripherals generates the UPDI signal. Independent of the pin (the GPIO matrix maps any pin to any UART). Don't pick the one the ESPHome logger uses (UART0 by default); this is checked at compile time, as is the chip's UART count. `uart_num: 0` is allowed when the logger is moved to USB (`USB_SERIAL_JTAG` / `USB_CDC`) or disabled. |
 | `baud_rate` | `115200` | UPDI baud rate. |
+
+UART peripherals per chip: ESP32 / S3 = 3 (0-2), S2 / C2 / C3 / C5 / C6 / H2 = 2 (0-1), P4 = 5 (0-4).
 
 ## Wiring
 
