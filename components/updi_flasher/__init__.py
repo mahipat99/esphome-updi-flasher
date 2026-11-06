@@ -1,5 +1,6 @@
 import esphome.codegen as cg
 import esphome.config_validation as cv
+from esphome import pins
 from esphome.components import web_server_base
 from esphome.components.web_server_base import CONF_WEB_SERVER_BASE_ID
 from esphome.const import CONF_ID
@@ -21,7 +22,7 @@ CONFIG_SCHEMA = cv.Schema(
         cv.GenerateID(CONF_WEB_SERVER_BASE_ID): cv.use_id(
             web_server_base.WebServerBase
         ),
-        cv.Required(CONF_PIN): cv.int_range(min=0, max=48),
+        cv.Required(CONF_PIN): pins.internal_gpio_output_pin_number,
         cv.Optional(CONF_UART_NUM, default=1): cv.int_range(min=1, max=2),
         cv.Optional(CONF_BAUD_RATE, default=115200): cv.int_range(min=9600, max=921600),
     }

@@ -11,6 +11,9 @@ wifi:
   ssid: !secret wifi_ssid
   password: !secret wifi_password
 
+web_server:
+  port: 80
+
 logger:
   hardware_uart: UART0
 
@@ -21,6 +24,6 @@ external_components:
     components: [updi_flasher]
 
 updi_flasher:
-  pin: 17        # single UPDI wire (open-drain, UART tx+rx muxed)
-  uart_num: 1       # not the logger UART
+  pin: GPIO17       # single UPDI wire (GPIO17, GPIO21, TX... all accepted)
+  uart_num: 1       # optional: internal UART peripheral (0-2); must not be the logger's
   baud_rate: 115200

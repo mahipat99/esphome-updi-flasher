@@ -16,8 +16,8 @@ external_components:
     components: [updi_flasher]
 
 updi_flasher:
-  pin: 17
-  uart_num: 1
+  pin: GPIO17        # any output-capable GPIO
+  uart_num: 1        # optional, default 1
   baud_rate: 115200
 ```
 
@@ -25,6 +25,14 @@ Then browse to `http://<device>/updi`, choose your `.hex` (e.g. exported from
 Arduino IDE with megaTinyCore: *Sketch > Export Compiled Binary*), and upload.
 
 See `examples/` for full configs.
+
+## Options
+
+| Option | Default | Meaning |
+|---|---|---|
+| `pin` | required | GPIO used as the single UPDI wire (`GPIO21`, `TX`, ... all accepted). |
+| `uart_num` | `1` | Which of the chip's internal UART peripherals generates the UPDI signal. Independent of the pin (the GPIO matrix maps any pin to any UART). Don't pick the one the ESPHome logger uses (UART0 by default). |
+| `baud_rate` | `115200` | UPDI baud rate. |
 
 ## Wiring
 
